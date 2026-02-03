@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import '@fontsource/libre-baskerville/400.css';
+@import '@fontsource/libre-baskerville/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+@layer base {
+  :root {
+    /* Editorial color palette - warm, neutral, trustworthy */
+    --background: 40 20% 98%;
+    --foreground: 220 15% 15%;
+
+    --card: 40 15% 96%;
+    --card-foreground: 220 15% 15%;
+
+    --popover: 40 20% 98%;
+    --popover-foreground: 220 15% 15%;
+
+    /* Charcoal primary - institutional, serious */
+    --primary: 220 15% 20%;
+    --primary-foreground: 40 20% 98%;
+
+    /* Soft warm grey secondary */
+    --secondary: 40 10% 92%;
+    --secondary-foreground: 220 15% 20%;
+
+    /* Muted tones */
+    --muted: 40 10% 94%;
+    --muted-foreground: 220 10% 45%;
+
+    /* Sage green accent - calm, trustworthy */
+    --accent: 160 25% 35%;
+    --accent-foreground: 40 20% 98%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 40 20% 98%;
+
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 160 25% 35%;
+
+    --radius: 0.375rem;
+
+    /* Editorial typography */
+    --font-serif: 'Libre Baskerville', Georgia, serif;
+    --font-sans: 'Inter', system-ui, sans-serif;
+
+    /* Spacing rhythm */
+    --section-gap: 6rem;
+    --content-gap: 2rem;
+
+    --sidebar-background: 40 15% 96%;
+    --sidebar-foreground: 220 15% 25%;
+    --sidebar-primary: 220 15% 20%;
+    --sidebar-primary-foreground: 40 20% 98%;
+    --sidebar-accent: 40 10% 92%;
+    --sidebar-accent-foreground: 220 15% 20%;
+    --sidebar-border: 40 15% 88%;
+    --sidebar-ring: 160 25% 35%;
+  }
+
+  .dark {
+    --background: 220 15% 10%;
+    --foreground: 40 15% 92%;
+
+    --card: 220 15% 13%;
+    --card-foreground: 40 15% 92%;
+
+    --popover: 220 15% 10%;
+    --popover-foreground: 40 15% 92%;
+
+    --primary: 40 15% 92%;
+    --primary-foreground: 220 15% 10%;
+
+    --secondary: 220 12% 18%;
+    --secondary-foreground: 40 15% 92%;
+
+    --muted: 220 12% 18%;
+    --muted-foreground: 40 10% 60%;
+
+    --accent: 160 30% 45%;
+    --accent-foreground: 220 15% 10%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 40 20% 98%;
+
+    --border: 220 12% 22%;
+    --input: 220 12% 22%;
+    --ring: 160 30% 45%;
+
+    --sidebar-background: 220 15% 12%;
+    --sidebar-foreground: 40 15% 88%;
+    --sidebar-primary: 160 30% 50%;
+    --sidebar-primary-foreground: 220 15% 10%;
+    --sidebar-accent: 220 12% 18%;
+    --sidebar-accent-foreground: 40 15% 88%;
+    --sidebar-border: 220 12% 22%;
+    --sidebar-ring: 160 30% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  /* Editorial typography hierarchy */
+  h1, h2, h3, h4 {
+    font-family: var(--font-serif);
+    @apply tracking-tight;
+  }
+
+  h1 {
+    @apply text-4xl md:text-5xl lg:text-6xl font-bold leading-tight;
+  }
+
+  h2 {
+    @apply text-3xl md:text-4xl font-bold leading-tight;
+  }
+
+  h3 {
+    @apply text-xl md:text-2xl font-bold leading-snug;
+  }
+
+  h4 {
+    @apply text-lg font-bold leading-snug;
+  }
+
+  p {
+    @apply leading-relaxed;
+  }
+}
+
+@layer components {
+  /* Editorial link style */
+  .editorial-link {
+    @apply text-accent underline underline-offset-4 decoration-accent/40 
+           hover:decoration-accent transition-colors duration-200;
+  }
+
+  /* Subtle divider */
+  .editorial-divider {
+    @apply border-t border-border;
+  }
+
+  /* Category tag */
+  .category-tag {
+    @apply inline-block text-xs font-medium uppercase tracking-widest 
+           text-accent px-0 py-1;
+  }
+
+  /* Card hover - calm, not aggressive */
+  .editorial-card {
+    @apply bg-card border border-border rounded-sm p-6
+           transition-all duration-300 ease-out
+           hover:border-muted-foreground/30 hover:shadow-sm;
+  }
+
+  /* Section container */
+  .section-container {
+    @apply max-w-6xl mx-auto px-6 md:px-8;
+  }
+}
+
+@layer utilities {
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+
+  /* Text balance for headlines */
+  .text-balance {
+    text-wrap: balance;
+  }
+}
