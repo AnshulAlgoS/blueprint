@@ -261,8 +261,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
             <Button 
               onClick={handlePushToAirtable}
               disabled={selectedIndices.size === 0 || pushing}
-              variant="outline"
-              className="border-green-600 text-green-600 hover:bg-green-50"
+              className="bg-green-700 hover:bg-green-800 text-white font-bold text-lg px-8 py-6 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pushing ? "Pushing..." : `Push ${selectedIndices.size} to Airtable`}
             </Button>
