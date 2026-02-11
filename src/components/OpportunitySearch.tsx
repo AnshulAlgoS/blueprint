@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
@@ -209,9 +210,11 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="col-span-2">
           <label className="text-sm font-medium mb-1 block">Custom Search Prompt</label>
-          <Input
+          <Textarea
             value={customPrompt}
             onChange={(e) => setCustomPrompt(e.target.value)}
+            className="min-h-[80px]"
+            placeholder="Enter your search criteria..."
           />
         </div>
         <div>
