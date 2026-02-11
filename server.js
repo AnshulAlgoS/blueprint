@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 const httpsAgent = new https.Agent({  
   rejectUnauthorized: false
@@ -25,8 +25,8 @@ const httpsAgent = new https.Agent({
 app.use(cors());
 app.use(bodyParser.json());
 
-const SERPER_API_KEY = "f30bd068980fbf7d215bcbb38c1b381bdfbb69b7";
-const NVIDIA_API_KEY = "Bearer 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";
+const SERPER_API_KEY = process.env.SERPER_API_KEY;
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 
 let targetDomains = [];
 
@@ -66,21 +66,19 @@ async function loadTargetSites() {
 }
 
 async function fetchUrlContent(url) {
-  // console.log(`   ⏳ Fetching: ${url}`); // Reduce noise if needed
-  
-  // 1. Hard Timeout Race (Nuclear Option against hangs)
+  // Hard Timeout Race 
   const timeoutPromise = new Promise(resolve => 
     setTimeout(() => {
         console.log(`   ⏱️ HARD TIMEOUT forced for ${url}`);
         resolve(null);
-    }, 6000) // 6s hard limit
+    }, 20000) // 20s hard limit
   );
 
-  // 2. Actual Fetch Logic
+  // Actual Fetch Logic
   const fetchLogic = async () => {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000); // 5s internal timeout
+        const timeout = setTimeout(() => controller.abort(), 15000); // 15s internal timeout
 
         const response = await axios.get(url, {
           signal: controller.signal,
@@ -100,7 +98,7 @@ async function fetchUrlContent(url) {
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1'
           },
-          timeout: 5000,
+          timeout: 15000,
           maxRedirects: 3,
           validateStatus: (status) => status < 500 // Accept 403s so we can handle them explicitly
         });
@@ -135,7 +133,6 @@ async function fetchUrlContent(url) {
         let text = $('body').text().replace(/\s+/g, ' ').trim();
         return text.substring(0, 6000);
       } catch (error) {
-        // console.log(`   ⚠️ Failed: ${url} (${error.message})`);
         return null;
       }
   };
@@ -144,25 +141,42 @@ async function fetchUrlContent(url) {
 }
 
 let blueprintData = [];
-try {
-  const csvPath = path.join(__dirname, 'public', 'blueprint.csv');
-  const csvContent = fs.readFileSync(csvPath, 'utf-8');
-  const lines = csvContent.split('\n');
-  const headers = lines[0].split(',');
-  
-  blueprintData = lines.slice(1).map(line => {
-    const values = line.split(',');
-    return {
-      name: values[0],
-      org: values[1],
-      summary: values[3],
-      deadline: values[4],
-      link: values[9]
-    };
-  }).filter(item => item.name);
-} catch (error) {
-  console.error("Error loading blueprint.csv:", error);
+let evidenceData = [];
+
+function loadCsvData() {
+    try {
+        const blueprintPath = path.join(__dirname, 'public', 'blueprint.csv');
+        if (fs.existsSync(blueprintPath)) {
+            const csvContent = fs.readFileSync(blueprintPath, 'utf-8');
+            const lines = csvContent.split('\n');
+            blueprintData = lines.slice(1).map(line => {
+                const values = line.split(','); // Basic split, assumes no commas in names for now
+                return { name: values[0]?.trim(), link: values[9]?.trim() };
+            }).filter(item => item.name);
+            console.log(`Loaded ${blueprintData.length} existing Blueprint opportunities.`);
+        }
+    } catch (error) {
+        console.error("Error loading blueprint.csv:", error.message);
+    }
+
+    try {
+        const evidencePath = path.join(__dirname, 'public', 'evidence .csv');
+        if (fs.existsSync(evidencePath)) {
+            const csvContent = fs.readFileSync(evidencePath, 'utf-8');
+            const lines = csvContent.split('\n');
+            evidenceData = lines.slice(1).map(line => {
+                // Handle potential quotes in CSV if possible, but basic split for now. "Opportunity Name" is column 0
+                const values = line.split(','); 
+                return { name: values[0]?.trim(), link: values[9]?.trim() };
+            }).filter(item => item.name);
+            console.log(`Loaded ${evidenceData.length} existing Evidence opportunities.`);
+        }
+    } catch (error) {
+        console.error("Error loading evidence .csv:", error.message);
+    }
 }
+
+loadCsvData();
 
 const getSystemPrompt = (expireBy, type = 'blueprint') => {
   const today = new Date();
@@ -244,6 +258,10 @@ Core Rules (Non-Negotiable):
 - Strict Formatting: Return ONLY the JSON array.
 - No explanations outside the JSON.
 - **Link Verification**: Ensure the "Source Link" is a direct, functioning URL.
+- **Exact Naming (CRITICAL)**: You must extract the Opportunity Name **ONLY** from the provided text snippet. 
+    - Do NOT use your internal training data to rename opportunities. 
+    - If the text says "Regular Grants", do NOT rename it to "Alicia Patterson" or anything else.
+    - If you are unsure of the name, use the page title found in the snippet.
 `;
   }
 
@@ -322,39 +340,30 @@ async function generateSearchKeywords(userQuery, type = 'blueprint') {
         prompt = `You are a Search Query Optimizer for an "Evidence" opportunity finder (Investigative Journalism).
         
         User Query: "${userQuery}"
-        CURRENT YEAR: 2025
         
-        Goal: Find "Evidence" opportunities which are STRICTLY defined as:
-        1. Investigative Journalism Grants/Funds
-        2. Open-Source Intelligence (OSINT) Fellowships
-        3. Cross-border investigative collaborations
-        4. Data journalism support
+        Goal: Expand the user's query into 3-5 effective Google search keywords to find "Evidence" opportunities (Investigative Journalism, Data Journalism, OSINT).
         
-        NOT product development. NOT general news reporting.
+        Instructions:
+        1. Keep the user's core intent. If they didn't mention OSINT, don't force it.
+        2. Add terms like "grant", "fellowship", "fund", "call for proposals" if missing.
+        3. Include "2026" for freshness. Do NOT include "2025" unless specifically asked.
+        4. Do NOT include specific deadline constraints like "deadline after Feb 27" (we handle dates separately).
         
-        Output 3-5 high-quality Google search terms.
-        Focus on "investigative grant", "call for proposals", "OSINT fellowship", "reporting fund".
-        Include  or "2026" in the keywords to ensure freshness.
-        
-        Format: Just the keywords separated by spaces. No quotes around the whole string.`;
+        Output: Just the keywords separated by spaces. No quotes.`;
     } else {
         prompt = `You are a Search Query Optimizer for a "Blueprint" opportunity finder.
         
         User Query: "${userQuery}"
-        CURRENT YEAR: 2025
         
-        Goal: Find "Blueprint" opportunities which are STRICTLY defined as:
-        1. Product Design/Development for journalism
-        2. Service Design/Development for journalism
-        3. Building tools, products, designs, and solutions to aid journalists/media.
+        Goal: Expand the user's query into 3-5 effective Google search keywords to find "Blueprint" opportunities (Media Product/Service Design, Innovation).
         
-        NOT editorial grants. NOT reporting fellowships.
+        Instructions:
+        1. Keep the user's core intent.
+        2. Add terms like "grant", "fellowship", "fund", "innovation lab" if missing.
+        3. Include "2026" for freshness. Do NOT include "2025" unless specifically asked.
+        4. Do NOT include specific deadline constraints like "deadline after Feb 27" (we handle dates separately).
         
-        Output 3-5 high-quality Google search terms.
-        Focus on "call for proposals", "apply", "innovation grant", "product development fellowship".
-        Include "2025" or "2026" in the keywords to ensure freshness.
-        
-        Format: Just the keywords separated by spaces. No quotes around the whole string.`;
+        Output: Just the keywords separated by spaces. No quotes.`;
     }
     
     const response = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
@@ -372,13 +381,13 @@ async function generateSearchKeywords(userQuery, type = 'blueprint') {
     });
 
     let keywords = response.data.choices[0].message.content.trim();
-    // Remove quotes if the LLM adds them
-    keywords = keywords.replace(/^"|"$/g, '');
+    // Remove quotes and newlines
+    keywords = keywords.replace(/^"|"$/g, '').replace(/[\r\n]+/g, ' ');
     return keywords;
   } catch (error) {
     console.error("Error generating keywords:", error.message);
     if (type === 'evidence') {
-        return "investigative journalism grants osint fellowship";
+        return "investigative journalism grants";
     }
     return "journalism product design development grant fellowship";
   }
@@ -411,73 +420,100 @@ async function verifyCandidate(candidate, minDeadlineString, type = 'blueprint')
   console.log(`\n🕵️‍♂️ Deep Verifying (${type}): "${name}"...`);
 
   try {
-  let verifyQuery = `site:${new URL(candidate["Source Link"] || "http://google.com").hostname} "${name}" application`;
-  
-  verifyQuery = verifyQuery.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    let bestLink = null;
+    let content = null;
 
-  let searchResponse = await axios.post('https://google.serper.dev/search', {
-    q: verifyQuery,
-    num: 3 
-  }, {
-    headers: {
-      'X-API-KEY': SERPER_API_KEY,
-      'Content-Type': 'application/json'
-    }
-  });
-
-  let results = searchResponse.data.organic || [];
-
-  if (results.length === 0) {
-      console.log(`   Strict site-search failed for "${name}". Attempting broad search...`);
-      
-      let broadQuery = `"${name}" (application OR apply OR deadline)`;
-      try {
-        let broadResponse = await axios.post('https://google.serper.dev/search', {
-            q: broadQuery,
-            num: 3
-        }, {
-            headers: {
-            'X-API-KEY': SERPER_API_KEY,
-            'Content-Type': 'application/json'
+    // 1. Try Direct Link First (Optimization)
+    if (candidate["Source Link"] && candidate["Source Link"] !== "NA") {
+        try {
+            const directUrl = new URL(candidate["Source Link"]);
+            // Avoid trying to fetch root domains like "google.com" or "medium.com" directly unless specific
+            if (directUrl.pathname.length > 1) {
+                console.log(`   Trying direct source link: ${candidate["Source Link"]}`);
+                const directContent = await fetchUrlContent(candidate["Source Link"]);
+                if (directContent && directContent.length > 500) {
+                    console.log(`   ✅ Direct link valid. Using content directly.`);
+                    bestLink = candidate["Source Link"];
+                    content = directContent;
+                }
             }
-        });
-        results = broadResponse.data.organic || [];
-      } catch (e) {
-          console.log(`   Broad search failed: ${e.message}`);
-      }
-  }
+        } catch (e) {
+            console.log(`   Direct link fetch failed: ${e.message}`);
+        }
+    }
 
-  if (results.length === 0) {
-    console.log(`❌ Verification failed for "${name}": No search results found (strict or broad).`);
-    return null;
-  }
+    // 2. Fallback to Search if Direct Link failed
+    if (!content) {
+        try {
+            let verifyQuery = `site:${new URL(candidate["Source Link"] || "http://google.com").hostname} "${name}" application`;
+            
+            verifyQuery = verifyQuery.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-  let bestLink = null;
-  let content = null;
-  
-  const socialMediaDomains = ['instagram.com', 'facebook.com', 'twitter.com', 'linkedin.com', 'tiktok.com', 'pinterest.com'];
+            let searchResponse = await axios.post('https://google.serper.dev/search', {
+                q: verifyQuery,
+                num: 3 
+            }, {
+                headers: {
+                'X-API-KEY': SERPER_API_KEY,
+                'Content-Type': 'application/json'
+                }
+            });
 
-  for (const result of results) {
-      const isSocial = socialMediaDomains.some(domain => result.link.includes(domain));
-      if (isSocial) {
-          console.log(`   Skipping social media link: ${result.link}`);
-          continue;
-      }
+            let results = searchResponse.data.organic || [];
 
-      console.log(`   Checking Source: ${result.link}`);
-      content = await fetchUrlContent(result.link);
-      
-      if (content && content.length > 200 && !content.includes("403 Forbidden") && !content.includes("Access Denied")) {
-          bestLink = result.link;
-          break;
-      } else {
-           console.log(`   ⚠️ Failed to fetch or blocked: ${result.link}`);
-      }
-  }
+            if (results.length === 0) {
+                console.log(`   Strict site-search failed for "${name}". Attempting broad search...`);
+                
+                // Relaxed broad query: Removed quotes around name to allow partial matches
+                let broadQuery = `${name} (application OR apply OR deadline OR grant OR fellowship)`;
+                try {
+                    let broadResponse = await axios.post('https://google.serper.dev/search', {
+                        q: broadQuery,
+                        num: 3
+                    }, {
+                        headers: {
+                        'X-API-KEY': SERPER_API_KEY,
+                        'Content-Type': 'application/json'
+                        }
+                    });
+                    results = broadResponse.data.organic || [];
+                } catch (e) {
+                    console.log(`   Broad search failed: ${e.message}`);
+                }
+            }
+
+            if (results.length === 0) {
+                console.log(`❌ Verification failed for "${name}": No search results found (strict or broad).`);
+                return null;
+            }
+
+            const socialMediaDomains = ['instagram.com', 'facebook.com', 'twitter.com', 'linkedin.com', 'tiktok.com', 'pinterest.com'];
+
+            for (const result of results) {
+                const isSocial = socialMediaDomains.some(domain => result.link.includes(domain));
+                if (isSocial) {
+                    console.log(`   Skipping social media link: ${result.link}`);
+                    continue;
+                }
+
+                console.log(`   Checking Source: ${result.link}`);
+                content = await fetchUrlContent(result.link);
+                
+                if (content && content.length > 200 && !content.includes("403 Forbidden") && !content.includes("Access Denied")) {
+                    bestLink = result.link;
+                    break;
+                } else {
+                    console.log(`   ⚠️ Failed to fetch or blocked: ${result.link}`);
+                }
+            }
+        } catch (err) {
+            console.log(`   Verification Search Error: ${err.message}`);
+        }
+    }
 
     if (!bestLink || !content) {
-       console.log(`❌ Verification failed for "${name}": Could not fetch content from any of the top 5 sources.`);
-       return null;
+        console.log(`❌ Verification failed for "${name}": Could not fetch content from any source.`);
+        return null;
     }
 
     // Check for explicit closed indicators in the content
@@ -657,12 +693,12 @@ app.get('/api/search', async (req, res) => {
       }
   }
   
-  // --- PHASE 1: TARGETED SEARCH (Strictly Specific Websites) ---
+  // PHASE 1: TARGETED SEARCH (Strictly Specific Websites)
   if (targetDomains.length > 0) {
       console.log(`\n🎯 PHASE 1: Targeted Search across ${targetDomains.length} domains...`);
       sendEvent('log', `Scanning ${targetDomains.length} specific websites...`);
       
-      const domainBatches = chunk(targetDomains, 10); // 10 sites per query
+      const domainBatches = chunk(targetDomains, 3); // 3 sites per query to avoid 400 errors
       
       for (const [index, batch] of domainBatches.entries()) {
           if (allVerifiedOpportunities.length >= targetCount) {
@@ -672,24 +708,21 @@ app.get('/api/search', async (req, res) => {
           }
 
           const siteQuery = batch.map(d => `site:${d}`).join(' OR ');
-          // Use date specific query if available, otherwise generic. 
-          // RELAXED: Removed "deadline" keyword to catch more results.
+          // Use date specific query if available, otherwise generic. RELAXED: Removed "deadline" keyword.
           const datePart = dateSpecificQuery || `(2025 OR 2026)`;
           
-          // Use the enhanced searchKeywords instead of just optimizedKeywords
-          // We intentionally drop the full 'optimizedKeywords' if it's too long, relying on our shorter cleaned version
-          // And we avoid the site-specific OR chain if it's too long for Google (max ~32 words usually)
-          // But here we are chunking 10 sites, so that's fine.
-          
+          // Use enhanced keywords and avoid long OR chains (chunking 10 sites handles this).
           let targetedQuery = `(${siteQuery}) ${searchKeywords} ${datePart}`; 
           
+          console.log(`   🔎 Targeted Query (Batch ${index + 1}): [${targetedQuery}]`); // DEBUG LOG
+
           console.log(`   Processing Batch ${index + 1}/${domainBatches.length}...`);
           sendEvent('log', `Processing Batch ${index + 1}/${domainBatches.length}...`);
           
           try {
               let searchResponse = await axios.post('https://google.serper.dev/search', {
                   q: targetedQuery,
-                  num: 20,
+                  num: 30,
                   tbs: "qdr:y" // Past year
               }, {
                   headers: {
@@ -700,7 +733,6 @@ app.get('/api/search', async (req, res) => {
 
               let searchResults = searchResponse.data.organic || [];
               
-              // DEBUG LOG
               console.log(`   Batch ${index + 1} Raw Results: ${searchResults.length}`);
               
               // FALLBACK: If 0 results, try very broad query for this batch
@@ -741,17 +773,18 @@ app.get('/api/search', async (req, res) => {
       sendEvent('log', "No specific websites loaded.");
   }
 
-  // --- PHASE 2: BROAD SEARCH (Fallback if needed) ---
+  // PHASE 2: BROAD SEARCH (Fallback if needed)
   if (allVerifiedOpportunities.length < targetCount) {
       console.log(`   Phase 1 yielded ${allVerifiedOpportunities.length} results. Running Phase 2 (High-Quality Broad Search)...`);
       sendEvent('log', `Phase 1 found ${allVerifiedOpportunities.length} results. Expanding search to high-quality external sources...`);
       
       const broadQueries = type === 'evidence' ? [
-          `"investigative journalism" (grant OR fund OR fellowship) "application deadline" 2026 -gaming`,
-          `"OSINT" (fellowship OR grant) "apply by" 2026 -award -prize`
+          `"investigative journalism" (grant OR fund OR fellowship) (deadline OR "apply by") 2026 -gaming`,
+          `"OSINT" (fellowship OR grant) (deadline OR "apply by") 2026 -award -prize`,
+          `"data journalism" (fund OR grant) 2026`
       ] : [
-          `"journalism" (fellowship OR grant OR "product development") "application deadline" 2026 -gaming -esports`,
-          `"media innovation" (funding OR opportunity) "apply by" 2026 -award -prize`
+          `"journalism" (fellowship OR grant OR "product development") (deadline OR "apply by") 2026 -gaming -esports`,
+          `"media innovation" (funding OR opportunity) (deadline OR "apply by") 2026 -award -prize`
       ];
 
       for (const q of broadQueries) {
@@ -796,8 +829,15 @@ app.get('/api/search', async (req, res) => {
 
 // Helper function to process search results (fetch, extract, verify)
 async function processSearchResults(searchResults, userQuery, expireBy, allVerifiedOpportunities, processedTitles, type = 'blueprint') {
-    const topResults = searchResults.slice(0, 10); 
-    console.log(`   Fetching content for ${topResults.length} results...`);
+    // Filter out social media and noise BEFORE slicing top 30
+    const socialMediaDomains = ['instagram.com', 'facebook.com', 'twitter.com', 'linkedin.com', 'tiktok.com', 'pinterest.com', 'reddit.com'];
+    const cleanResults = searchResults.filter(r => {
+        const isSocial = socialMediaDomains.some(domain => r.link.includes(domain));
+        return !isSocial;
+    });
+
+    const topResults = cleanResults.slice(0, 30); 
+    console.log(`   Fetching content for ${topResults.length} results (filtered ${searchResults.length - cleanResults.length} social media links)...`);
     
     const fetchedResults = await Promise.allSettled(topResults.map(async (r) => {
         const content = await fetchUrlContent(r.link);
@@ -856,7 +896,7 @@ Return JSON array.` }
                 "Accept": "application/json",
                 "Content-Type": "application/json"
             },
-            timeout: 15000 // 15s timeout
+            timeout: 60000 // 60s timeout for deep extraction
         });
 
         const content = verificationResponse.data.choices[0].message.content;
@@ -884,10 +924,27 @@ Return JSON array.` }
         console.log(`   🔍 Extracted ${opportunities.length} candidates. Verifying...`);
         const verificationDeadline = expireBy || new Date().toISOString().split('T')[0];
 
+        // Select the correct dataset based on type
+        const existingOpportunities = type === 'evidence' ? evidenceData : blueprintData;
+
         for (const op of opportunities) {
             if (processedTitles.has(op["Opportunity Name"])) continue;
             
-            const verifiedOp = await verifyCandidate(op, verificationDeadline);
+            // Check against loaded CSV data (Name or Link)
+            const isDuplicate = existingOpportunities.some(existing => {
+                const nameMatch = existing.name && op["Opportunity Name"] && 
+                                  existing.name.toLowerCase().trim() === op["Opportunity Name"].toLowerCase().trim();
+                const linkMatch = existing.link && op["Source Link"] && 
+                                  existing.link.toLowerCase().trim() === op["Source Link"].toLowerCase().trim();
+                return nameMatch || linkMatch;
+            });
+
+            if (isDuplicate) {
+                console.log(`   ⏭️ Skipping duplicate found in ${type} CSV: "${op["Opportunity Name"]}"`);
+                continue;
+            }
+
+            const verifiedOp = await verifyCandidate(op, verificationDeadline, type);
             if (verifiedOp) {
                 allVerifiedOpportunities.push(verifiedOp);
                 processedTitles.add(verifiedOp["Opportunity Name"]);
@@ -898,8 +955,8 @@ Return JSON array.` }
     }
 }
 
-const AIRTABLE_API_KEY = "patJEqY1tvu1kScCb.9c0c1acf3bc842f90cc1d02442d2c23ebc1408e0cf3e682a94c14c3a8e5e44b1";
-const AIRTABLE_BASE_ID = "appwSbJ5pFIbkaCgN";
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_NAME = "MediaOpps";
 
 app.post('/api/push-to-airtable', async (req, res) => {

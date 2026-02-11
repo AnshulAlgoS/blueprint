@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,6 +49,29 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [pushing, setPushing] = useState(false);
 
+  // Load saved results from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(`opportunity-search-results-${type}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            setSearchResults(parsed);
+            setLogs([`Restored ${parsed.length} saved results from local storage.`]);
+        }
+      } catch (e) {
+        console.error("Failed to parse saved results:", e);
+      }
+    }
+  }, [type]);
+
+  // Save results to localStorage whenever they update
+  useEffect(() => {
+    if (searchResults.length > 0) {
+        localStorage.setItem(`opportunity-search-results-${type}`, JSON.stringify(searchResults));
+    }
+  }, [searchResults, type]);
+
   const toggleSelection = (idx: number) => {
     const newSet = new Set(selectedIndices);
     if (newSet.has(idx)) {
@@ -66,7 +89,8 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
     const selectedOps = Array.from(selectedIndices).map(idx => searchResults[idx]);
     
     try {
-      const response = await fetch("http://localhost:3001/api/push-to-airtable", {
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+      const response = await fetch(`${apiUrl}/api/push-to-airtable`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ opportunities: selectedOps })
@@ -92,6 +116,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
     setLoading(true);
     setLogs([]);
     setSearchResults([]);
+    localStorage.removeItem(`opportunity-search-results-${type}`); // Clear old results on new search
     
     const queryParams = new URLSearchParams({
         query: customPrompt,
@@ -99,7 +124,8 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
         type: type
     });
 
-    const eventSource = new EventSource(`http://localhost:3001/api/search?${queryParams.toString()}`);
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+    const eventSource = new EventSource(`${apiUrl}/api/search?${queryParams.toString()}`);
 
     eventSource.onmessage = (event) => {
         try {
@@ -130,6 +156,16 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
                       "Track (Editor)": "",
                       Notes: "",
                     }));
+                    
+                    // Sort by deadline (ascending) to meet "ordered table" requirement
+                    newOps.sort((a: any, b: any) => {
+                        const dateA = new Date(a["Application Deadline"]);
+                        const dateB = new Date(b["Application Deadline"]);
+                        if (isNaN(dateA.getTime())) return 1; // Put invalid dates at the end
+                        if (isNaN(dateB.getTime())) return -1;
+                        return dateA.getTime() - dateB.getTime();
+                    });
+
                     setSearchResults(newOps);
                 }
                 setLoading(false);
@@ -146,6 +182,16 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
         setLoading(false);
         setLogs(prev => [...prev, "Search completed or connection closed."]);
     };
+  };
+
+  const handleClearResults = () => {
+    if (confirm("Are you sure you want to clear all results and reset the search?")) {
+        setSearchResults([]);
+        setLogs([]);
+        setCustomPrompt(defaultPrompt);
+        setExpireBy("");
+        localStorage.removeItem(`opportunity-search-results-${type}`);
+    }
   };
 
   return (
@@ -178,13 +224,26 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
         </div>
       </div>
       
-      <Button 
-        onClick={performWebSearch} 
-        disabled={loading} 
-        className="w-full md:w-auto text-lg py-6"
-      >
-        {loading ? "Searching & Verifying..." : "Deep Search & Verify (AI)"}
-      </Button>
+      <div className="flex gap-4">
+        <Button 
+            onClick={performWebSearch} 
+            disabled={loading} 
+            className="flex-1 md:flex-none text-lg py-6"
+        >
+            {loading ? "Searching & Verifying..." : "Deep Search & Verify (AI)"}
+        </Button>
+
+        {searchResults.length > 0 && (
+            <Button 
+                onClick={handleClearResults}
+                variant="destructive"
+                disabled={loading}
+                className="text-lg py-6"
+            >
+                Clear & Reset
+            </Button>
+        )}
+      </div>
 
       {logs.length > 0 && (
         <div className="bg-slate-950 text-slate-50 p-4 rounded-md h-40 overflow-y-auto font-mono text-xs border border-slate-800 shadow-inner">
@@ -209,16 +268,27 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
             </Button>
           </div>
 
-          <div className="border rounded-md overflow-hidden">
+          <div className="border rounded-md overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">Select</TableHead>
-                  <TableHead>Opportunity Name</TableHead>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Deadline</TableHead>
-                  <TableHead>Summary</TableHead>
-                  <TableHead>Link</TableHead>
+                  <TableHead className="min-w-[200px]">Opportunity Name</TableHead>
+                  <TableHead className="min-w-[150px]">Sponsoring Organization/Funder</TableHead>
+                  <TableHead className="min-w-[150px]">Funding/Salary/Benefit</TableHead>
+                  <TableHead className="min-w-[300px]">Summary</TableHead>
+                  <TableHead className="min-w-[120px]">Application Deadline</TableHead>
+                  <TableHead className="min-w-[150px]">Target Sector/Beneficiaries</TableHead>
+                  <TableHead className="min-w-[200px]">Eligibility</TableHead>
+                  <TableHead className="min-w-[150px]">Geographic Focus</TableHead>
+                  <TableHead className="min-w-[200px]">Consortium/Partnership Notes</TableHead>
+                  <TableHead className="min-w-[100px]">Source Link</TableHead>
+                  <TableHead className="min-w-[200px]">End Summary</TableHead>
+                  <TableHead className="min-w-[100px]">Status</TableHead>
+                  <TableHead className="min-w-[120px]">Date Added</TableHead>
+                  <TableHead className="min-w-[100px]">Track (AI)</TableHead>
+                  <TableHead className="min-w-[100px]">Track (Editor)</TableHead>
+                  <TableHead className="min-w-[200px]">Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -232,13 +302,24 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
                     </TableCell>
                     <TableCell className="font-medium">{op["Opportunity Name"]}</TableCell>
                     <TableCell>{op["Sponsoring Organization/Funder"]}</TableCell>
+                    <TableCell>{op["Funding/Salary/Benefit"]}</TableCell>
+                    <TableCell className="text-sm">{op["Summary"]}</TableCell>
                     <TableCell>{op["Application Deadline"]}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{op["Summary"]}</TableCell>
+                    <TableCell>{op["Target Sector/Beneficiaries"]}</TableCell>
+                    <TableCell className="text-sm">{op["Eligibility"]}</TableCell>
+                    <TableCell>{op["Geographic Focus"]}</TableCell>
+                    <TableCell className="text-sm">{op["Consortium/Partnership Notes"]}</TableCell>
                     <TableCell>
-                      <a href={op["Source Link"]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                        View
+                      <a href={op["Source Link"]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline whitespace-nowrap">
+                        View Link
                       </a>
                     </TableCell>
+                    <TableCell className="text-sm">{op["End Summary"]}</TableCell>
+                    <TableCell>{op["Status"]}</TableCell>
+                    <TableCell>{new Date(op["Date Added"]).toLocaleDateString()}</TableCell>
+                    <TableCell>{op["Track (AI)"]}</TableCell>
+                    <TableCell>{op["Track (Editor)"]}</TableCell>
+                    <TableCell>{op["Notes"]}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

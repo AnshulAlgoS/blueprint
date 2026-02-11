@@ -12,7 +12,7 @@ const Index = () => {
             type="blueprint"
             title="Blueprint Opportunity Finder"
             description="Search the live web for new Blueprint opportunities (Product/Service Design) and verify them with AI."
-            defaultPrompt="Find journalism product grants in Europe for 2025"
+            defaultPrompt=""
             badgeText="Blueprint AI"
         />
 
@@ -21,7 +21,7 @@ const Index = () => {
             type="evidence"
             title="Evidence Opportunity Finder"
             description="Search for Investigative Journalism, OSINT, and Data Journalism opportunities."
-            defaultPrompt="Find investigative journalism grants and OSINT fellowships for 2025"
+            defaultPrompt=""
             badgeText="Evidence AI"
         />
       </main>
