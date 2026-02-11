@@ -22,8 +22,21 @@ const httpsAgent = new https.Agent({
   rejectUnauthorized: false
 });
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://media-opportunity-finder.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(bodyParser.json());
+
+// Root route for health check
+app.get('/', (req, res) => {
+  res.send('Blueprint Backend is Running! 🚀');
+});
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;

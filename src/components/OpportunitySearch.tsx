@@ -89,7 +89,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
     const selectedOps = Array.from(selectedIndices).map(idx => searchResults[idx]);
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+      const apiUrl = import.meta.env.VITE_API_URL || "https://blueprint-hkk9.onrender.com";
       const response = await fetch(`${apiUrl}/api/push-to-airtable`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,7 +124,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
         type: type
     });
 
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+    const apiUrl = import.meta.env.VITE_API_URL || "https://blueprint-hkk9.onrender.com";
     const eventSource = new EventSource(`${apiUrl}/api/search?${queryParams.toString()}`);
 
     eventSource.onmessage = (event) => {
