@@ -196,19 +196,19 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
   };
 
   return (
-    <Card className="p-6 space-y-4 border-2 border-primary/20">
-      <div className="flex justify-between items-start">
+    <Card className="p-4 md:p-6 space-y-4 border-2 border-primary/20">
+      <div className="flex flex-col md:flex-row justify-between items-start gap-2 md:gap-0">
         <div>
-          <h1 className="text-3xl font-serif text-primary">{title}</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-serif text-primary">{title}</h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             {description}
           </p>
         </div>
-        <Badge variant="secondary" className="text-lg px-4 py-1">{badgeText}</Badge>
+        <Badge variant="secondary" className="text-sm md:text-lg px-4 py-1 self-start md:self-auto">{badgeText}</Badge>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="col-span-2">
+        <div className="col-span-1 md:col-span-2">
           <label className="text-sm font-medium mb-1 block">Custom Search Prompt</label>
           <Textarea
             value={customPrompt}
@@ -217,7 +217,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
             placeholder="Enter your search criteria..."
           />
         </div>
-        <div>
+        <div className="col-span-1">
           <label className="text-sm font-medium mb-1 block">Deadline After (Earliest Date)</label>
           <Input
             type="date"
@@ -227,11 +227,11 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
         </div>
       </div>
       
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         <Button 
             onClick={performWebSearch} 
             disabled={loading} 
-            className="flex-1 md:flex-none text-lg py-6"
+            className="w-full md:w-auto md:flex-1 md:flex-none text-lg py-6"
         >
             {loading ? "Searching & Verifying..." : "Deep Search & Verify (AI)"}
         </Button>
@@ -241,7 +241,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
                 onClick={handleClearResults}
                 variant="destructive"
                 disabled={loading}
-                className="text-lg py-6"
+                className="w-full md:w-auto text-lg py-6"
             >
                 Clear & Reset
             </Button>
@@ -259,12 +259,12 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
 
       {searchResults.length > 0 && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <h3 className="text-xl font-semibold">Verified Results ({searchResults.length})</h3>
             <Button 
               onClick={handlePushToAirtable}
               disabled={selectedIndices.size === 0 || pushing}
-              className="bg-green-700 hover:bg-green-800 text-white font-bold text-lg px-8 py-6 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full md:w-auto bg-green-700 hover:bg-green-800 text-white font-bold text-lg px-8 py-6 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {pushing ? "Pushing..." : `Push ${selectedIndices.size} to Airtable`}
             </Button>
