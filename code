@@ -1,0 +1,709 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Media Opportunities's API",
+    "description": "Airtable API definition for CRUD operations into Media Opportunities",
+    "version": "v0"
+  },
+  "servers": [
+    {
+      "url": "https://api.airtable.com/v0",
+      "description": "API URL"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "MediaOpps": {
+        "type": "object",
+        "properties": {
+          "Opportunity Name": {
+            "type": "string",
+            "description": ""
+          },
+          "Sponsoring Organization/Funder": {
+            "type": "string",
+            "description": ""
+          },
+          "Summary": {
+            "type": "string",
+            "description": ""
+          },
+          "Funding/Salary/Benefit": {
+            "type": "string",
+            "description": ""
+          },
+          "Application Deadline": {
+            "type": "string",
+            "description": "ISO date YYYY-MM-DD or NA"
+          },
+          "Eligibility": {
+            "type": "string",
+            "description": ""
+          },
+          "Target Sector/Beneficiaries": {
+            "type": "string",
+            "description": ""
+          },
+          "Geographic Focus": {
+            "type": "string",
+            "description": ""
+          },
+          "Consortium/Partnership Notes": {
+            "type": "string",
+            "description": ""
+          },
+          "Source Link": {
+            "type": "string",
+            "description": ""
+          },
+          "End Summary": {
+            "type": "string",
+            "description": ""
+          }
+,
+"Status": {
+  "type": "string",
+  "description": "Workflow status (e.g., Draft, For Review)"
+},
+"Track (AI)": {
+  "type": "string",
+  "description": "AI classification track (Blueprint/Evidence)"
+},
+"Track (Editor)": {
+  "type": "string",
+  "description": "Editor review status"
+},
+"Notes": {
+  "type": "string",
+  "description": "Internal notes"
+}
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/appwSbJ5pFIbkaCgN/MediaOpps": {
+      "get": {
+        "operationId": "Get MediaOpps",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Get records",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fields",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "in": "query",
+            "name": "filterByFormula",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "maxRecords",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "default": "asc"
+                  }
+                },
+                "required": [
+                  "field"
+                ]
+              }
+            }
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cellFormat",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "string"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeZone",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "userLocale",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "createdTime": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "fields": {
+                            "$ref": "#/components/schemas/MediaOpps"
+                          }
+                        }
+                      }
+                    },
+                    "offset": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Post MediaOpps",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Create new record(s)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "records": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fields": {
+                          "$ref": "#/components/schemas/MediaOpps"
+                        }
+                      }
+                    }
+                  },
+                  "typecast": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "createdTime": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "fields": {
+                            "$ref": "#/components/schemas/MediaOpps"
+                          }
+                        }
+                      }
+                    },
+                    "offset": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "Patch MediaOpps",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Partially update existing record(s). Missing fields in request are not modified",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "records": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "fields": {
+                          "$ref": "#/components/schemas/MediaOpps"
+                        }
+                      }
+                    }
+                  },
+                  "typecast": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "createdTime": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "fields": {
+                            "$ref": "#/components/schemas/MediaOpps"
+                          }
+                        }
+                      }
+                    },
+                    "offset": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "Put MediaOpps",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Update existing record(s). Missing fields in the request are updated to null/empty.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "records": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "fields": {
+                          "$ref": "#/components/schemas/MediaOpps"
+                        }
+                      }
+                    }
+                  },
+                  "typecast": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "createdTime": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "fields": {
+                            "$ref": "#/components/schemas/MediaOpps"
+                          }
+                        }
+                      }
+                    },
+                    "offset": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Delete MediaOpps",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Delete record(s)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "records",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "deleted": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "deleted"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/appwSbJ5pFIbkaCgN/MediaOpps/{record_id}": {
+      "get": {
+        "operationId": "Get MediaOpps Record",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Get record",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "createdTime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fields": {
+                      "$ref": "#/components/schemas/MediaOpps"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "Patch MediaOpps Record",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Partially update existing record(s). Missing fields in request are not modified",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "fields": {
+                    "$ref": "#/components/schemas/MediaOpps"
+                  },
+                  "typecast": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "createdTime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fields": {
+                      "$ref": "#/components/schemas/MediaOpps"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "Put MediaOpps Record",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Update existing record. Missing fields in the request are updated to null/empty.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "fields": {
+                    "$ref": "#/components/schemas/MediaOpps"
+                  },
+                  "typecast": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "createdTime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fields": {
+                      "$ref": "#/components/schemas/MediaOpps"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Delete MediaOpps Record",
+        "tags": [
+          "MediaOpps"
+        ],
+        "summary": "Delete record",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "deleted"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
