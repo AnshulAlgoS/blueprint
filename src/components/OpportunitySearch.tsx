@@ -49,6 +49,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
   const [searchResults, setSearchResults] = useState<Opportunity[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [pushing, setPushing] = useState(false);
+  const [enriching, setEnriching] = useState(false);
 
   // Load saved results from localStorage on mount
   useEffect(() => {
@@ -90,7 +91,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
     const selectedOps = Array.from(selectedIndices).map(idx => searchResults[idx]);
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "https://blueprint-hkk9.onrender.com";
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:3001" : "https://blueprint-hkk9.onrender.com");
       const response = await fetch(`${apiUrl}/api/push-to-airtable`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,6 +114,34 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
     }
   };
 
+  const handleEnrichRecords = async () => {
+    setEnriching(true);
+    setLogs(prev => [...prev, "--- Starting manual enrichment pipeline ---"]);
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:3001" : "https://blueprint-hkk9.onrender.com");
+      const response = await fetch(`${apiUrl}/api/process-airtable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setLogs(prev => [...prev, `Enrichment complete: Processed ${data.processed} records, ${data.errors} errors.`]);
+        alert(`Enrichment complete! Processed: ${data.processed}, Errors: ${data.errors}`);
+      } else {
+        setLogs(prev => [...prev, `Enrichment failed: ${data.error}`]);
+        alert(`Enrichment failed: ${data.error}`);
+      }
+    } catch (e) {
+      setLogs(prev => [...prev, "Error triggering enrichment. Check console."]);
+      alert("Error triggering enrichment. Check console.");
+      console.error(e);
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   const performWebSearch = () => {
     setLoading(true);
     setLogs([]);
@@ -124,8 +153,8 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
         expireBy: expireBy,
         type: type
     });
-
-    const apiUrl = import.meta.env.VITE_API_URL || "https://blueprint-hkk9.onrender.com";
+  
+    const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:3001" : "https://blueprint-hkk9.onrender.com");
     const eventSource = new EventSource(`${apiUrl}/api/search?${queryParams.toString()}`);
 
     eventSource.onmessage = (event) => {
@@ -234,6 +263,15 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
             className="w-full md:w-auto md:flex-1 md:flex-none text-lg py-6"
         >
             {loading ? "Searching & Verifying..." : "Deep Search & Verify (AI)"}
+        </Button>
+
+        <Button 
+            onClick={handleEnrichRecords}
+            disabled={enriching}
+            variant="outline"
+            className="w-full md:w-auto text-lg py-6 border-2 border-primary/50 hover:bg-primary/10"
+        >
+            {enriching ? "Enriching..." : "Enrich Airtable Records"}
         </Button>
 
         {searchResults.length > 0 && (

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
 import https from 'https';
 import mammoth from 'mammoth';
+import { runEnrichmentPipeline } from './enrichment.js';
 
 dotenv.config();
 
@@ -26,10 +27,12 @@ app.use(cors({
   origin: [
     'https://media-opportunity-finder.vercel.app',
     'http://localhost:5173',
-    'http://localhost:3000'
+    'http://localhost:3000',
+    'http://localhost:8001',
+    'http://localhost:8081'
   ],
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control']
 }));
 app.use(bodyParser.json());
 
@@ -348,6 +351,7 @@ Core Rules (Non-Negotiable):
 
 async function generateSearchKeywords(userQuery, type = 'blueprint') {
   try {
+    const authHeader = NVIDIA_API_KEY.startsWith('Bearer') ? NVIDIA_API_KEY : `Bearer ${NVIDIA_API_KEY}`;
     let prompt;
     if (type === 'evidence') {
         prompt = `You are a Search Query Optimizer for an "Evidence" opportunity finder (Investigative Journalism).
@@ -380,13 +384,13 @@ async function generateSearchKeywords(userQuery, type = 'blueprint') {
     }
     
     const response = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
-      model: "mistralai/ministral-14b-instruct-2512",
+      model: "qwen/qwen2.5-coder-32b-instruct",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 50,
       temperature: 0.1
     }, {
       headers: {
-        "Authorization": NVIDIA_API_KEY,
+        "Authorization": authHeader,
         "Accept": "application/json",
         "Content-Type": "application/json"
       },
@@ -657,8 +661,15 @@ app.get('/api/search', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  const sendEvent = (type, data) => {
+    res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+  };
+
+  let keepAlive;
+
+  try {
     // Keep connection alive
-    const keepAlive = setInterval(() => {
+    keepAlive = setInterval(() => {
         res.write(': keep-alive\n\n');
     }, 15000);
 
@@ -666,10 +677,6 @@ app.get('/api/search', async (req, res) => {
     res.on('close', () => {
         clearInterval(keepAlive);
     });
-
-    const sendEvent = (type, data) => {
-        res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
-    };
 
     console.log(`Received raw query: ${query}, Expire By: ${expireBy}, Type: ${type}`);
   sendEvent('log', `Starting ${type} search for: ${query}`);
@@ -838,6 +845,12 @@ app.get('/api/search', async (req, res) => {
           console.log("Search request completed and response closed.");
       }, 500);
   }, 500);
+  } catch (error) {
+    console.error("❌ Search route failed:", error.message);
+    sendEvent('log', `Error: ${error.message}`);
+    clearInterval(keepAlive);
+    res.end();
+  }
 });
 
 // Helper function to process search results (fetch, extract, verify)
@@ -879,7 +892,7 @@ async function processSearchResults(searchResults, userQuery, expireBy, allVerif
     ).join('\n\n----------------\n\n');
 
     const verificationPayload = {
-        model: "mistralai/ministral-14b-instruct-2512",
+        model: "qwen/qwen2.5-coder-32b-instruct",
         messages: [
             { role: "system", content: getSystemPrompt(expireBy, type) },
             { role: "user", content: `Here is the search context from the web.
@@ -903,9 +916,10 @@ Return JSON array.` }
 
     try {
         console.log(`   🧠 Sending content to AI for extraction...`);
+        const authHeader = NVIDIA_API_KEY.startsWith('Bearer') ? NVIDIA_API_KEY : `Bearer ${NVIDIA_API_KEY}`;
         const verificationResponse = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', verificationPayload, {
             headers: {
-                "Authorization": NVIDIA_API_KEY,
+                "Authorization": authHeader,
                 "Accept": "application/json",
                 "Content-Type": "application/json"
             },
@@ -994,7 +1008,8 @@ app.post('/api/push-to-airtable', async (req, res) => {
       "Consortium/Partnership Notes": op["Consortium/Partnership Notes"] || "NA",
       "Source Link": op["Source Link"] || "NA",
       "End Summary": op["End Summary"] || "NA",
-      "Status": "Draft"
+      "Status": "Draft",
+      "Notes": "Raw"
     }
   }));
 
@@ -1022,10 +1037,30 @@ app.post('/api/push-to-airtable', async (req, res) => {
     }
     
     console.log(`✅ Successfully pushed ${results.length} records to Airtable.`);
+    
+    // Automatically trigger enrichment pipeline
+    console.log('--- Automatically triggering enrichment pipeline after push ---');
+    runEnrichmentPipeline().catch(err => console.error('Auto-enrichment failed:', err.message));
+
     res.json({ success: true, count: results.length, records: results });
   } catch (error) {
     console.error("❌ Airtable push failed:", error.response ? JSON.stringify(error.response.data) : error.message);
     res.status(500).json({ error: "Failed to push to Airtable", details: error.response ? error.response.data : error.message });
+  }
+});
+
+app.post('/api/process-airtable', async (req, res) => {
+  console.log('--- Manually triggering enrichment pipeline ---');
+  try {
+    const result = await runEnrichmentPipeline();
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json(result);
+    }
+  } catch (error) {
+    console.error('Failed to trigger enrichment pipeline:', error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -1034,6 +1069,12 @@ async function startServer() {
     app.listen(port, () => {
       console.log(`Server running at http://localhost:${port}`);
     });
+
+    // Optional: Run enrichment pipeline every 5 minutes
+    // setInterval(async () => {
+    //   console.log('--- Automated enrichment pipeline trigger ---');
+    //   await runEnrichmentPipeline();
+    // }, 5 * 60 * 1000);
 }
 
 startServer();
