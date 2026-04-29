@@ -349,42 +349,55 @@ Core Rules (Non-Negotiable):
 `;
 };
 
-async function generateSearchKeywords(userQuery, type = 'blueprint') {
+async function generateSearchKeywords(userQuery, type = 'blueprint', expireBy = null) {
   try {
     const authHeader = NVIDIA_API_KEY.startsWith('Bearer') ? NVIDIA_API_KEY : `Bearer ${NVIDIA_API_KEY}`;
+    
+    let deadlineHint = "";
+    if (expireBy) {
+        const d = new Date(expireBy);
+        if (!isNaN(d.getTime())) {
+            const month = d.toLocaleString('default', { month: 'long' });
+            const year = d.getFullYear();
+            deadlineHint = `The search should prioritize opportunities with deadlines around or after ${month} ${year}. Include "${year}" and possibly "${month}" in the keywords if it helps find active calls.`;
+        }
+    }
+
     let prompt;
     if (type === 'evidence') {
         prompt = `You are a Search Query Optimizer for an "Evidence" opportunity finder (Investigative Journalism).
         
         User Query: "${userQuery}"
+        ${deadlineHint}
         
         Goal: Expand the user's query into 3-5 effective Google search keywords to find "Evidence" opportunities (Investigative Journalism, Data Journalism, OSINT).
         
         Instructions:
-        1. Keep the user's core intent. If they didn't mention OSINT, don't force it.
+        1. Keep the user's core intent.
         2. Add terms like "grant", "fellowship", "fund", "call for proposals" if missing.
-        3. Include "2026" for freshness. Do NOT include "2025" unless specifically asked.
-        4. Do NOT include specific deadline constraints like "deadline after Feb 27" (we handle dates separately).
+        3. ${expireBy ? 'Use the deadline hint provided to include the correct year/month.' : 'Include "2026" for freshness.'}
+        4. Do NOT include specific deadline constraints like "deadline after Feb 27" as a literal string.
         
         Output: Just the keywords separated by spaces. No quotes.`;
     } else {
         prompt = `You are a Search Query Optimizer for a "Blueprint" opportunity finder.
         
         User Query: "${userQuery}"
+        ${deadlineHint}
         
         Goal: Expand the user's query into 3-5 effective Google search keywords to find "Blueprint" opportunities (Media Product/Service Design, Innovation).
         
         Instructions:
         1. Keep the user's core intent.
         2. Add terms like "grant", "fellowship", "fund", "innovation lab" if missing.
-        3. Include "2026" for freshness. Do NOT include "2025" unless specifically asked.
-        4. Do NOT include specific deadline constraints like "deadline after Feb 27" (we handle dates separately).
+        3. ${expireBy ? 'Use the deadline hint provided to include the correct year/month.' : 'Include "2026" for freshness.'}
+        4. Do NOT include specific deadline constraints like "deadline after Feb 27" as a literal string.
         
         Output: Just the keywords separated by spaces. No quotes.`;
     }
     
     const response = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
-      model: "qwen/qwen2.5-coder-32b-instruct",
+      model: "mistralai/ministral-14b-instruct-2512",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 50,
       temperature: 0.1
@@ -681,7 +694,7 @@ app.get('/api/search', async (req, res) => {
     console.log(`Received raw query: ${query}, Expire By: ${expireBy}, Type: ${type}`);
   sendEvent('log', `Starting ${type} search for: ${query}`);
 
-  const optimizedKeywords = await generateSearchKeywords(query, type);
+  const optimizedKeywords = await generateSearchKeywords(query, type, expireBy);
   console.log(`Optimized Keywords: ${optimizedKeywords}`);
   sendEvent('log', `Optimized Keywords: ${optimizedKeywords}`);
   
@@ -718,32 +731,24 @@ app.get('/api/search', async (req, res) => {
       console.log(`\n🎯 PHASE 1: Targeted Search across ${targetDomains.length} domains...`);
       sendEvent('log', `Scanning ${targetDomains.length} specific websites...`);
       
-      const domainBatches = chunk(targetDomains, 3); // 3 sites per query to avoid 400 errors
+      const domainBatches = chunk(targetDomains, 15); // Increased batch size to 15 sites per query
       
-      for (const [index, batch] of domainBatches.entries()) {
-          if (allVerifiedOpportunities.length >= targetCount) {
-              console.log("🎯 Target count reached during Targeted Search. Stopping.");
-              sendEvent('log', "Target count reached.");
-              break;
-          }
+      // Process batches in parallel with a limit
+      const processBatch = async (batch, index) => {
+          if (allVerifiedOpportunities.length >= targetCount) return;
 
           const siteQuery = batch.map(d => `site:${d}`).join(' OR ');
-          // Use date specific query if available, otherwise generic. RELAXED: Removed "deadline" keyword.
           const datePart = dateSpecificQuery || `(2025 OR 2026)`;
-          
-          // Use enhanced keywords and avoid long OR chains (chunking 10 sites handles this).
           let targetedQuery = `(${siteQuery}) ${searchKeywords} ${datePart}`; 
           
-          console.log(`   🔎 Targeted Query (Batch ${index + 1}): [${targetedQuery}]`); // DEBUG LOG
-
           console.log(`   Processing Batch ${index + 1}/${domainBatches.length}...`);
           sendEvent('log', `Processing Batch ${index + 1}/${domainBatches.length}...`);
           
           try {
               let searchResponse = await axios.post('https://google.serper.dev/search', {
                   q: targetedQuery,
-                  num: 30,
-                  tbs: "qdr:y" // Past year
+                  num: 20, // Reduced from 30 for speed
+                  tbs: "qdr:y" 
               }, {
                   headers: {
                       'X-API-KEY': SERPER_API_KEY,
@@ -753,41 +758,36 @@ app.get('/api/search', async (req, res) => {
 
               let searchResults = searchResponse.data.organic || [];
               
-              console.log(`   Batch ${index + 1} Raw Results: ${searchResults.length}`);
-              
-              // FALLBACK: If 0 results, try very broad query for this batch
               if (searchResults.length === 0) {
-                   console.log(`   ⚠️ Batch ${index + 1} empty. Retrying with broad fallback...`);
-                   sendEvent('log', `   Batch ${index + 1} empty. Retrying with broad fallback...`);
-                   
-                   let fallbackQuery;
-                   if (type === 'evidence') {
-                       fallbackQuery = `(${siteQuery}) (investigative journalism OR OSINT OR "data journalism") (grant OR fellowship) 2026`;
-                   } else {
-                       fallbackQuery = `(${siteQuery}) journalism (grant OR fellowship OR innovation) 2026`;
-                   }
+                   let fallbackQuery = type === 'evidence' 
+                       ? `(${siteQuery}) (investigative journalism OR OSINT) (grant OR fellowship) 2026`
+                       : `(${siteQuery}) journalism (grant OR fellowship OR innovation) 2026`;
 
                    const fallbackResponse = await axios.post('https://google.serper.dev/search', {
                       q: fallbackQuery,
-                      num: 20,
+                      num: 10,
                       tbs: "qdr:y"
                    }, { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' } });
                    
                    searchResults = fallbackResponse.data.organic || [];
-                   console.log(`   Batch ${index + 1} Fallback Results: ${searchResults.length}`);
               }
 
               if (searchResults.length > 0) {
-                  sendEvent('log', `   Found ${searchResults.length} raw results in batch ${index + 1}. Verifying...`);
-                  await processSearchResults(searchResults, query, expireBy, allVerifiedOpportunities, processedTitles, type);
+                  sendEvent('log', `   Found ${searchResults.length} results in batch ${index + 1}. Verifying...`);
+                  // Use a smaller fetch limit for Phase 1 to keep it under 1 min
+                  await processSearchResults(searchResults.slice(0, 10), query, expireBy, allVerifiedOpportunities, processedTitles, type);
                   sendEvent('progress', { found: allVerifiedOpportunities.length, target: targetCount });
-              } else {
-                  sendEvent('log', `   No raw results in batch ${index + 1}.`);
               }
           } catch (err) {
-              console.error(`   ❌ Error in targeted batch ${index + 1}:`, err.message);
-              sendEvent('log', `Error in batch ${index + 1}: ${err.message}`);
+              console.error(`   ❌ Error in batch ${index + 1}:`, err.message);
           }
+      };
+
+      // Run batches in parallel groups of 4 to stay within 1 minute
+      for (let i = 0; i < domainBatches.length; i += 4) {
+          if (allVerifiedOpportunities.length >= targetCount) break;
+          const parallelBatches = domainBatches.slice(i, i + 4).map((batch, idx) => processBatch(batch, i + idx));
+          await Promise.all(parallelBatches);
       }
   } else {
       sendEvent('log', "No specific websites loaded.");
@@ -892,7 +892,7 @@ async function processSearchResults(searchResults, userQuery, expireBy, allVerif
     ).join('\n\n----------------\n\n');
 
     const verificationPayload = {
-        model: "qwen/qwen2.5-coder-32b-instruct",
+        model: "mistralai/ministral-14b-instruct-2512",
         messages: [
             { role: "system", content: getSystemPrompt(expireBy, type) },
             { role: "user", content: `Here is the search context from the web.
