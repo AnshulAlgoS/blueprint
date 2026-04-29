@@ -155,6 +155,7 @@ export const OpportunitySearch = ({ type, title, description, defaultPrompt, bad
     });
   
     const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:3001" : "https://blueprint-hkk9.onrender.com");
+    console.log(`Connecting to: ${apiUrl}/api/search?${queryParams.toString()}`);
     const eventSource = new EventSource(`${apiUrl}/api/search?${queryParams.toString()}`);
 
     eventSource.onmessage = (event) => {

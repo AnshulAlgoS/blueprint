@@ -665,6 +665,7 @@ async function verifyCandidate(candidate, minDeadlineString, type = 'blueprint')
 }
 
 app.get('/api/search', async (req, res) => {
+  console.log('--- Incoming Search Request ---');
   const query = req.query.query;
   const expireBy = req.query.expireBy;
   const type = req.query.type || 'blueprint';
@@ -684,19 +685,22 @@ app.get('/api/search', async (req, res) => {
     // Keep connection alive
     keepAlive = setInterval(() => {
         res.write(': keep-alive\n\n');
-    }, 15000);
+        // Also send a log every 30 seconds to show we are still working
+        sendEvent('log', 'Searching and verifying... Please wait.');
+    }, 20000);
 
     // Ensure we clear the interval when the response ends
     res.on('close', () => {
         clearInterval(keepAlive);
     });
 
-    console.log(`Received raw query: ${query}, Expire By: ${expireBy}, Type: ${type}`);
-  sendEvent('log', `Starting ${type} search for: ${query}`);
+    console.log(`[SEARCH] Received raw query: ${query}, Expire By: ${expireBy}, Type: ${type}`);
+    sendEvent('log', `Starting ${type} search for: ${query}`);
 
-  const optimizedKeywords = await generateSearchKeywords(query, type, expireBy);
-  console.log(`Optimized Keywords: ${optimizedKeywords}`);
-  sendEvent('log', `Optimized Keywords: ${optimizedKeywords}`);
+    console.log(`[SEARCH] Generating keywords...`);
+    const optimizedKeywords = await generateSearchKeywords(query, type, expireBy);
+    console.log(`[SEARCH] Optimized Keywords: ${optimizedKeywords}`);
+    sendEvent('log', `Optimized Keywords: ${optimizedKeywords}`);
   
   // Force "apply" context
   const searchKeywords = `${optimizedKeywords} (apply OR application OR "call for proposals")`;
@@ -801,10 +805,17 @@ app.get('/api/search', async (req, res) => {
       const broadQueries = type === 'evidence' ? [
           `"investigative journalism" (grant OR fund OR fellowship) (deadline OR "apply by") 2026 -gaming`,
           `"OSINT" (fellowship OR grant) (deadline OR "apply by") 2026 -award -prize`,
-          `"data journalism" (fund OR grant) 2026`
+          `"data journalism" (fund OR grant) 2026`,
+          `"accountability reporting" (grant OR fellowship) 2026`,
+          `"watchdog journalism" (fund OR fellowship) 2026`,
+          `"cross-border investigation" (grant OR fund) 2026`
       ] : [
           `"journalism" (fellowship OR grant OR "product development") (deadline OR "apply by") 2026 -gaming -esports`,
-          `"media innovation" (funding OR opportunity) (deadline OR "apply by") 2026 -award -prize`
+          `"media innovation" (funding OR opportunity) (deadline OR "apply by") 2026 -award -prize`,
+          `"news product" (grant OR fund OR innovation) 2026`,
+          `"media R&D" (funding OR opportunity OR grant) 2026`,
+          `"journalism technology" (grant OR fund OR fellowship) 2026`,
+          `"digital journalism" (innovation OR product) (grant OR fund) 2026`
       ];
 
       for (const q of broadQueries) {
@@ -812,9 +823,10 @@ app.get('/api/search', async (req, res) => {
           
           try {
               console.log(`   Running Broad Search: ${q}`);
+              sendEvent('log', `Checking high-quality source: ${q.split(' (')[0]}...`);
               const broadRes = await axios.post('https://google.serper.dev/search', {
                   q: q,
-                  num: 10
+                  num: 20 // Increased from 10
               }, { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' } });
               
               const candidates = broadRes.data.organic || [];
@@ -827,14 +839,43 @@ app.get('/api/search', async (req, res) => {
 
               if (validCandidates.length > 0) {
                   await processSearchResults(validCandidates, query, expireBy, allVerifiedOpportunities, processedTitles, type);
+                  sendEvent('progress', { found: allVerifiedOpportunities.length, target: targetCount });
               }
           } catch (e) {
               console.log(`   Phase 2 search failed: ${e.message}`);
           }
       }
-  } else {
-      console.log("   Skipping Phase 2 (Targeted Search satisfied request).");
-      sendEvent('log', "Targeted search successful.");
+  }
+
+  // PHASE 3: GLOBAL WEB SEARCH (Last Resort)
+  if (allVerifiedOpportunities.length < 2) { // If we still have very few results
+      console.log(`   Running Phase 3 (Global Web Search)...`);
+      sendEvent('log', "Phase 2 yielded few results. Running global deep search...");
+      
+      const globalQuery = type === 'evidence' 
+          ? `"investigative journalism" (grant OR fellowship OR fund) 2026 (deadline OR "apply by")`
+          : `"journalism innovation" (grant OR fund OR fellowship) 2026 (product OR tool OR service)`;
+
+      try {
+          const globalRes = await axios.post('https://google.serper.dev/search', {
+              q: globalQuery,
+              num: 40 // Broadest possible
+          }, { headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' } });
+          
+          const candidates = globalRes.data.organic || [];
+          const validCandidates = candidates.filter(c => 
+              !c.link.includes("linkedin.com") && 
+              !c.link.includes("indeed.com") &&
+              !c.title.toLowerCase().includes("gamer")
+          );
+
+          if (validCandidates.length > 0) {
+              await processSearchResults(validCandidates, query, expireBy, allVerifiedOpportunities, processedTitles, type);
+              sendEvent('progress', { found: allVerifiedOpportunities.length, target: targetCount });
+          }
+      } catch (e) {
+          console.log(`   Phase 3 search failed: ${e.message}`);
+      }
   }
 
   // Small delay to ensure last log is received
@@ -892,7 +933,7 @@ async function processSearchResults(searchResults, userQuery, expireBy, allVerif
     ).join('\n\n----------------\n\n');
 
     const verificationPayload = {
-        model: "mistralai/ministral-14b-instruct-2512",
+        model: "qwen/qwen2.5-coder-32b-instruct",
         messages: [
             { role: "system", content: getSystemPrompt(expireBy, type) },
             { role: "user", content: `Here is the search context from the web.
@@ -902,11 +943,13 @@ ${searchContext}
 
 User Query: ${userQuery}
 
-TASK: Extract NEW and UNIQUE ${type === 'evidence' ? 'Evidence' : 'Blueprint'} opportunities.
+TASK: Extract ALL valid NEW and UNIQUE ${type === 'evidence' ? 'Evidence' : 'Blueprint'} opportunities found in the context.
 - IGNORE any that match these already found titles: ${Array.from(processedTitles).join(", ")}
 - MUST have deadline ON or AFTER ${expireBy || "today"}.
 - **CRITICAL**: If a snippet lists a deadline BEFORE ${expireBy || "today"}, DO NOT INCLUDE IT.
 - **CRITICAL**: Return Valid JSON only. Do not wrap in markdown code blocks.
+- **THOROUGHNESS**: Scan the page content carefully to find the correct application link and deadline.
+- **QUALITY**: Only include professional opportunities (grants, fellowships, funds). Reject job listings or simple articles.
 
 Return JSON array.` }
         ],
