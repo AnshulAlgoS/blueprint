@@ -933,7 +933,7 @@ async function processSearchResults(searchResults, userQuery, expireBy, allVerif
     ).join('\n\n----------------\n\n');
 
     const verificationPayload = {
-        model: "qwen/qwen2.5-coder-32b-instruct",
+        model: "mistralai/ministral-14b-instruct-2512",
         messages: [
             { role: "system", content: getSystemPrompt(expireBy, type) },
             { role: "user", content: `Here is the search context from the web.
