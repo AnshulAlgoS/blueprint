@@ -42,7 +42,7 @@ async function classifyOpportunity(record) {
     console.log(`Classifying: ${opportunityName}`);
 
     const payload = {
-        model: "mistralai/ministral-14b-instruct-2512",
+        model: "qwen/qwen2.5-coder-32b-instruct",
         messages: [
             {
                 role: "user",

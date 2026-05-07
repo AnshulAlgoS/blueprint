@@ -397,7 +397,7 @@ async function generateSearchKeywords(userQuery, type = 'blueprint', expireBy = 
     }
     
     const response = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
-      model: "mistralai/ministral-14b-instruct-2512",
+      model: "qwen/qwen2.5-coder-32b-instruct",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 50,
       temperature: 0.1
@@ -600,7 +600,7 @@ async function verifyCandidate(candidate, minDeadlineString, type = 'blueprint')
     let factCheckText = "";
     try {
         const factCheckResponse = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
-            model: "mistralai/ministral-14b-instruct-2512",
+            model: "qwen/qwen2.5-coder-32b-instruct",
             messages: [
                 { role: "system", content: "You are a strict fact-checker. Return ONLY JSON." },
                 { role: "user", content: factCheckPrompt }
@@ -933,7 +933,7 @@ async function processSearchResults(searchResults, userQuery, expireBy, allVerif
     ).join('\n\n----------------\n\n');
 
     const verificationPayload = {
-        model: "mistralai/ministral-14b-instruct-2512",
+        model: "qwen/qwen2.5-coder-32b-instruct",
         messages: [
             { role: "system", content: getSystemPrompt(expireBy, type) },
             { role: "user", content: `Here is the search context from the web.
